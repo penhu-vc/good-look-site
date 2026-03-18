@@ -670,25 +670,6 @@ export default function Home() {
         </div>
       </Overlay>
 
-      {/* Feature modal */}
-      <Overlay open={featureModal !== null} onClose={() => setFeatureModal(null)}>
-        {featureModal !== null && (
-          <>
-            <h2 className="text-white text-2xl font-medium mb-3">
-              {FEATURES[featureModal].label}
-            </h2>
-            <p className="text-white/70 text-sm leading-relaxed mb-6">
-              {FEATURES[featureModal].description}
-            </p>
-            <RippleButton
-              className="liquid-glass-strong rounded-full px-6 py-2.5 text-white text-sm font-medium hover:scale-105 active:scale-95 transition-transform"
-              onClick={() => setFeatureModal(null)}
-            >
-              Got it
-            </RippleButton>
-          </>
-        )}
-      </Overlay>
 
       {/* Account modal */}
       <Overlay open={accountOpen} onClose={() => setAccountOpen(false)}>
