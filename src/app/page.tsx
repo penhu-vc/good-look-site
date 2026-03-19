@@ -210,7 +210,7 @@ export default function Home() {
         const obj: { Work: string[]; Personal: string[] } = { Work: [""], Personal: [""] };
         for (const row of data) {
           if (row.tab === "Work" || row.tab === "Personal") {
-            obj[row.tab] = Array.isArray(row.items) ? row.items : [""];
+            obj[row.tab as "Work" | "Personal"] = Array.isArray(row.items) ? row.items : [""];
           }
         }
         setNoteItems(obj);
