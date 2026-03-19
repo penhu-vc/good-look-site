@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { supabase } from "@/lib/supabase";
 import {
   Sparkles,
   Download,
@@ -166,7 +167,9 @@ export default function Home() {
         }
       } catch { /* fallback to hostname */ }
       const favicon = `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=64`;
-      setCustomSites((prev) => [...prev, { label: title, url, category: addSiteCategory, favicon }]);
+      const newSite = { label: title, url, category: addSiteCategory, favicon };
+      setCustomSites((prev) => [...prev, newSite]);
+      supabase.from("sites").insert(newSite).then(() => {});
       setAddSiteUrl("");
       setAddSiteOpen(false);
     } catch { /* invalid URL */ }
@@ -199,21 +202,42 @@ export default function Home() {
     }
   }, [quickAddUrl]);
 
-  // Load notes from localStorage on mount
+  // Load data from Supabase on mount
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("yaja-note-items");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.Work) setNoteItems(parsed);
+    // Load notes
+    supabase.from("notes").select("*").then(({ data }) => {
+      if (data) {
+        const obj: { Work: string[]; Personal: string[] } = { Work: [""], Personal: [""] };
+        for (const row of data) {
+          if (row.tab === "Work" || row.tab === "Personal") {
+            obj[row.tab] = Array.isArray(row.items) ? row.items : [""];
+          }
+        }
+        setNoteItems(obj);
       }
-    } catch { /* ignore */ }
+    });
+    // Load todos
+    supabase.from("todos").select("*").order("created_at", { ascending: true }).then(({ data }) => {
+      if (data) {
+        setTodos(data.map((t) => ({ id: t.id, text: t.text, done: t.done })));
+        if (data.length > 0) todoIdRef.current = Math.max(...data.map((t) => t.id)) + 1;
+      }
+    });
+    // Load custom sites
+    supabase.from("sites").select("*").order("created_at", { ascending: true }).then(({ data }) => {
+      if (data) {
+        setCustomSites(data.map((s) => ({
+          label: s.label, url: s.url, category: s.category as "Tool" | "外務", favicon: s.favicon || "",
+        })));
+      }
+    });
   }, []);
 
   const saveNotes = useCallback((items: { Work: string[]; Personal: string[] }) => {
     if (noteTimerRef.current) clearTimeout(noteTimerRef.current);
     noteTimerRef.current = setTimeout(() => {
-      localStorage.setItem("yaja-note-items", JSON.stringify(items));
+      supabase.from("notes").update({ items: items.Work, updated_at: new Date().toISOString() }).eq("tab", "Work").then(() => {});
+      supabase.from("notes").update({ items: items.Personal, updated_at: new Date().toISOString() }).eq("tab", "Personal").then(() => {});
     }, 500);
   }, []);
 
@@ -498,7 +522,11 @@ export default function Home() {
                   className="liquid-glass rounded-2xl px-4 py-2.5 flex items-center gap-3 group"
                 >
                   <button
-                    onClick={() => setTodos((prev) => prev.map((t) => t.id === todo.id ? { ...t, done: !t.done } : t))}
+                    onClick={() => {
+                      const newDone = !todo.done;
+                      setTodos((prev) => prev.map((t) => t.id === todo.id ? { ...t, done: newDone } : t));
+                      supabase.from("todos").update({ done: newDone }).eq("id", todo.id).then(() => {});
+                    }}
                     className="flex-shrink-0 hover:scale-110 active:scale-90 transition-transform"
                   >
                     {todo.done ? (
@@ -513,7 +541,10 @@ export default function Home() {
                     {todo.text}
                   </span>
                   <button
-                    onClick={() => setTodos((prev) => prev.filter((t) => t.id !== todo.id))}
+                    onClick={() => {
+                      setTodos((prev) => prev.filter((t) => t.id !== todo.id));
+                      supabase.from("todos").delete().eq("id", todo.id).then(() => {});
+                    }}
                     className="w-5 h-5 rounded-full flex items-center justify-center text-white/0 group-hover:text-white/30 hover:!text-white/60 transition-colors"
                   >
                     <X className="w-3 h-3" />
@@ -524,13 +555,15 @@ export default function Home() {
 
             {/* Add todo input */}
             <form
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
                 const text = todoInput.trim();
                 if (!text) return;
-                todoIdRef.current += 1;
-                setTodos((prev) => [...prev, { id: todoIdRef.current, text, done: false }]);
                 setTodoInput("");
+                const { data } = await supabase.from("todos").insert({ text, done: false }).select().single();
+                if (data) {
+                  setTodos((prev) => [...prev, { id: data.id, text: data.text, done: data.done }]);
+                }
               }}
               className="liquid-glass rounded-3xl px-4 py-3 flex items-center gap-3"
             >
